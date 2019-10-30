@@ -1,3 +1,5 @@
+//This code is a reference from axa_alex.v, check that if confused on some parts
+
 // Basic bit definitions
 `define DATA		[15:0]
 `define ADDRESS		[15:0]
@@ -17,6 +19,7 @@
 `define REGS		[15:0]
 `define OPERATION_BITS 	[6:0]
 `define REGSIZE		[15:0]
+`define USIZE [15:0]
 
 //Op values
 `define OPsys					6'b000000
@@ -61,7 +64,7 @@
 `define Decode					7'b1100000
 `define Decode2 				7'b1100001
 `define DecodeI8 				7'b1100010
-`define Nop					7'b1000010
+`define Nop					    7'b1000010
 `define SrcType					7'b1001000
 `define SrcRegister				7'b1001001
 `define SrcI4					7'b1001010
@@ -74,219 +77,35 @@
 `define OPxhi2					7'b1011000
 `define OPxhi3					7'b1011001
 
-module ALU(out, in1, in2, op);
-parameter BITS = 16;
-output reg [BITS-1:0] out;
-input `REGSIZE in1, in2;
-input `OPERATION_BITS op;
-reg `REGSIZE a;
-reg `REGSIZE temp;
-always @(in1 or in2 or op) begin #1
-	case(op)
-		`OPadd: begin out <= in1 + in2; end
-		`OPsub: begin out <= in1 - in2; end
-		`OPxor: begin out <= in1 ^ in2; end
-		`OProl: begin out <= {in1 << in2, in1 >> (BITS - in2)}; end
-		`OPshr: begin out <= in1 >> in2; end
-		`OPor:  begin out <= in1 | in2; end
-		`OPand: begin out <= in1 & in2; end
-        endcase
-end
 
-endmodule
 
 module processor(halt, reset, clk);
 output reg halt;
 input reset, clk;
 
-reg `DATA reglist `REGSIZE;
-reg `DATA datamem `SIZE;
-reg `INSTRUCTION instrmem `SIZE;
+reg `DATA reglist `REGSIZE;  //register file
+reg `DATA datamem `SIZE;  //data memory
+reg `INSTRUCTION instrmem `SIZE;  //instruction memory
 reg `DATA pc = 0;
 reg `INSTRUCTION ir;
-reg `STATE s, sLA;
-reg `DATA passreg;
-wire `DATA aluout;
+reg `STATE s;
 
-//Module instantiations
-ALU opalu(aluout, reglist[ir `DESTREG], passreg, sLA);
+reg `DATA usp;  //This is how we will index through undo buffer
+reg `DATA u `USIZE;  //undo stack
+
 
 always @(reset) begin
 	halt <= 0;
 	pc <= 0;
 	s <= `Start;
 //Setting initial values
-        $readmemh0(reglist); //Registers
+    $readmemh0(reglist); //Registers
 	$readmemh1(datamem); //Data
 	$readmemh2(instrmem); //Instructions
 end
 
-always @(posedge clk) begin
-	case(s)
-		`Start: begin
-			ir <= instrmem[pc];
-			s <= `Decode;
-			end
+//start pipeline
 
-		`Decode: begin
-			// Change to if statement to combine states?
-			//$display( "%d || %b || %d", reglist[ir `DESTREG], ir, pc);
-			if (ir `OP8IMM)
-				s <= `DecodeI8;
-			else
-				s <= `Decode2;
-
-			pc <= pc + 1;
-			end
-
-
-		// Regular Instruction
-		`Decode2: begin
-			// Grab the next state
-			case (ir `OP)
-				`OPland: s <= `Nop;
-				`OPcom: s <= `Nop;
-				`OPjerr: s <= `Nop;
-				`OPfail: s <= `Done;
-				`OPsys: s <= `Done;
-
-				default case (ir `SRCTYPE)
-					`SrcTypeRegister: s <= `SrcRegister;
-					`SrcTypeI4:  s <= `SrcI4;
-					`SrcTypeMem: s <= `SrcMem;
-					default: s <= `Start;
-				endcase
-			endcase
-
-			sLA <= ir `OP;
-			end
-
-		// I8 instruction
-		`DecodeI8: begin
-			if ( ir `OP8IMM)
-			begin
-				case (ir `OP8)
-					`OPxhiCheck: sLA <= `OPxhi;
-					`OPxloCheck: sLA <= `OPxlo;
-					`OPlhiCheck: sLA <= `OPlhi;
-					`OPlloCheck: sLA <= `OPllo;
-					default: halt <= 1;
-				endcase
-			end
-
-			s <= `SrcI8;
-			end
-
-		// Begin Src States
-
-		`SrcRegister: begin
-			passreg <= reglist[ir `SRCREG];
-			s <= sLA;
-			end
-
-		`SrcI4: begin
-			passreg <= {{12{ir `SRCREGMSB}}, ir `SRCREG};
-			s <= sLA;
-			end
-		`SrcI8: begin
-			passreg <=  {{8{ir `SRC8MSB}}, ir `SRC8};
-			s <= sLA;
-			end
-		`SrcMem: begin
-			// Too much in one cycle??
-			passreg <= datamem[reglist[ir `SRCREG]];
-			s <= sLA;
-			end
-
-
-		// Begin OPCODE States
-
-    	`OPxlo: begin reglist[ir  `DESTREG] <= reglist[ir `DESTREG]; s <= `OPxor; end
-		`OPxhi: begin reglist[12] <= passreg << 8; s <= `OPxhi2; end
-		`OPxhi2: begin passreg <= reglist[12]; s <= `OPxor; end
-		//`OPxhi3: begin  <= reglist[ir `DESTREG]; s <= `OPxor; end
-		//`ALUOUT: begin reglist[ir `DESTREG] <= aluout; s <= `Start; end
-		`OPllo: begin reglist[ir `DESTREG] <= {{8{passreg[7]}}, passreg}; s <=`Start; end
-		`OPlhi: begin reglist[ir `DESTREG] <= {passreg, 8'b0}; s <=`Start; end
-		`OPand: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OPor:	begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OPxor: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OPadd: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OPsub: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OProl: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-		`OPshr: begin reglist[ir `DESTREG] <= aluout; s <=`Start; end
-	`OPbzjz: begin if(reglist[ir `DESTREG]==0)
-		begin
-			if(ir `SRCTYPE == 2'b01)
-			begin
-
-				pc <= pc+passreg-1;
-			end
-			else
-			begin
-				pc <= passreg;
-			end
-
-		end
-		s <= `Start;
-		end
-
-		`OPbnzjnz: begin if(reglist[ir `DESTREG]!=0)
-		begin
-			if(ir `SRCTYPE == 2'b01)
-			begin
-				pc <= pc+passreg-1;
-			end
-			else
-			begin
-				pc <= passreg;
-			end
-
-		end
-		s <= `Start;
-		end
-
-		`OPbnjn: begin if(reglist[ir `DESTREG][15]==1)
-		begin
-			if(ir `SRCTYPE == 2'b01)
-			begin
-				pc <= pc+passreg-1;
-			end
-			else
-			begin
-				pc <= passreg;
-			end
-
-		end
-		s <= `Start;
-		end
-
-		`OPbnnjnn: begin if(reglist[ir `DESTREG][15]==0)
-		begin
-			if(ir `SRCTYPE == 2'b01)
-			begin
-				pc <= pc+passreg-1;
-			end
-			else
-			begin
-				pc <= passreg;
-			end
-
-		end
-		s <= `Start;
-		end
-
-		`Nop: s <= `Start;
-		`OPdup: begin reglist[ir `DESTREG] <= passreg; s <= `Start; end
-		`OPex: begin reglist[12] <= reglist[ir `DESTREG]; s <= `OPex2; end
-		`OPex2: begin reglist[ir `DESTREG] <= datamem[reglist[ir `SRCREG]]; s <= `OPex3; end
-		`OPex3: begin datamem[reglist[ir `SRCREG]] <= reglist[12]; s <= `Start; end
-		default: begin
-
-			halt <= 1;
-			end
-		endcase
-end
 
 endmodule
 
