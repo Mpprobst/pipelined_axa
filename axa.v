@@ -4,13 +4,16 @@
 `define DATA		[15:0]
 `define ADDRESS		[15:0]
 `define SIZE		[65535:0]
+`define WORD    	[15:0]
+`define WHIGH   	[15:8]
+`define WLOW		[7:0]
 `define INSTRUCTION	[15:0]
 `define OP		[15:10]
 `define OP8		[15:12]
 `define OPPUSH		[14]
 `define OP8IMM		[15]
 `define SRCTYPE		[9:8]
-`define DESTREG		[3:0]
+`define IDEST		[3:0]
 `define SRCREG		[7:4]
 `define SRCREGMSB 	[7]
 `define SRC8		[11:4]
@@ -64,14 +67,12 @@
 `define Decode					7'b1100000
 `define Decode2 				7'b1100001
 `define DecodeI8 				7'b1100010
-`define Nop					    7'b1000010
+`define Nop					7'b1000010
 `define SrcType					7'b1001000
 `define SrcRegister				7'b1001001
 `define SrcI4					7'b1001010
 `define SrcI8 					7'b1001011
 `define SrcMem					7'b1001100
-`define OPex2					7'b1010000
-`define OPex3					7'b1010001
 `define Done					6'b111101
 `define ALUOUT					7'b1010010
 `define OPxhi2					7'b1011000
@@ -87,7 +88,7 @@ reg `DATA reglist `REGSIZE;  //register file
 reg `DATA datamem `SIZE;  //data memory
 reg `INSTRUCTION instrmem `SIZE;  //instruction memory
 reg `DATA pc = 0;
-reg `INSTRUCTION ir;
+reg `INSTRUCTION ir0, ir1, ir2, ir3; //instruction registers for each stage 
 reg `STATE s;
 
 reg `DATA usp;  //This is how we will index through undo buffer
@@ -107,7 +108,43 @@ end
 //start pipeline
 
 
-endmodule
+// stage4: execute and write
+always @(posedge clk) begin
+
+	`OPxhi: begin regfile[ir3 `IDEST] <= {regfile[ir3 `IDEST]`WHIGH ^ src`WLOW, regfile[ir3 `IDEST]`WLOW}; st <= `Start; end
+	`OPxlo: begin regfile[ir3 `IDEST] <= {regfile[ir3 `IDEST]`WHIGH, regfile[ir3 `IDEST]`WLOW ^ src`WLOW}; st <= `Start; end
+	`OPlhi: begin regfile[ir3 `IDEST] <= {src `WLOW, 8'b0}; st <= `Start; end
+	`OPllo: begin regfile[ir3 `IDEST] <= src;               st <= `Start; end
+	`OPadd: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] + src;  st <= `Start; end
+	`OPsub: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] - src;  st <= `Start; end
+	`OPxor: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] ^ src;  st <= `Start; end
+	`OProl: begin regfile[ir3 `IDEST] <= ( (regfile[ir3 `IDEST] << src) | (regfile[ir3 `IDEST] >> (16-src)) ); st <= `Start; end
+	`OPshr: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] >> src; st <= `Start; end
+	`OPor:  begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] | src;  st <= `Start; end
+	`OPand: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] & src;  st <= `Start; end
+	`OPdup: begin regfile[ir3 `IDEST] <= src;                     st <= `Start; end
+
+// this may not work in pipelined design
+`define DO_BRANCH pc <= ((ir `SRCTYPE == `SrcTypeI4) ? pc + src - 1 : src)
+
+	`OPbz:  begin if (regfile[ir3 `IDEST] == 0) `DO_BRANCH; st <= `Start; end
+	`OPbnz: begin if (regfile[ir3 `IDEST] != 0) `DO_BRANCH; st <= `Start; end
+	`OPbn:  begin if ($signed(regfile[ir3 `IDEST]) < 0)  `DO_BRANCH; st <= `Start; end
+	`OPbnn: begin if ($signed(regfile[ir3 `IDEST]) >= 0) `DO_BRANCH; st <= `Start; end
+	
+	`OPex:  begin datamem[regfile[ir3 'ILSRC] <= regfile[ir3 `IDEST]; regfile[ir3 `IDEST] <= src;  st <= `Start end
+
+	// NOPs (not implemented in this project)
+	`OPland: begin st <= `Start; end
+	`OPjerr: begin st <= `Start; end
+	`OPcom:  begin st <= `Start; end
+
+	// HALTs
+	`OPfail: begin halt <= 1; end // Not implemented in this project
+	`OPsys:  begin halt <= 1; end
+	default: begin halt <= 1; end
+
+end
 
 module testbench;
 reg reset = 0;
