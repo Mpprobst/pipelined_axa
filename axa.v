@@ -144,6 +144,38 @@ end
 
 end //always block
 
+//stage2: register read
+always @(posedge clk) begin  //NEEDS TO HANDLE UNDO BUFFER
+	if(ir1 != `Nop) begin
+		wait1 = 1;
+		ir2 <= `Nop;
+	end else begin
+		wait1 = 0;
+		des <= reglist[ir0 `IDEST];
+		if(ir1 `SRCREG == `SrcTypeRegister) begin
+			src <= reglist[ir1 `SRCREG];
+		end
+		if(((ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) begin
+			//NEEDS TO PUSH des TO UNDO BUFFER
+		end
+		ir2 <= ir1;
+	end
+end
+
+//stage3: Data memory
+always @(posedge clk) begin //should handle selection of source?
+	if(ir2 == `Nop) begin
+	end else begin
+		if(ir2[15] == 1'b0) begin
+				case(ir2 `SRCREG)
+					`SrcTypeI4$: begin src <= ir2 `SRCREG; end // Is this correct?
+					`SrcTypeMem: begin src <= datamem[ir2 `SRCREG]; end
+					default: begin end
+				endcase 
+		end 
+	end
+	ir3 <= ir2;
+end
 // stage4: execute and write
 always @(posedge clk) begin
 	
