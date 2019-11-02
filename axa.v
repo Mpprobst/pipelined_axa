@@ -61,6 +61,7 @@
 `define SrcTypeRegister				2'b00
 `define SrcTypeI4				2'b01
 `define SrcTypeMem				2'b10
+`define SrcTypeI4Undo				2'b11
 
 //State values
 `define Start					7'b1000000
@@ -79,10 +80,6 @@
 `define OPxhi3					7'b1011001
 
 
-
-
-
-
 module processor(halt, reset, clk);
 output reg halt;
 input reset, clk;
@@ -98,6 +95,7 @@ reg branch; //is branch or not
 reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s;
+reg `DATA des, src;
 wire `DATA aluout;
 
 reg `DATA usp;  //This is how we will index through undo buffer
@@ -155,7 +153,7 @@ always @(posedge clk) begin  //NEEDS TO HANDLE UNDO BUFFER
 		if(ir1 `SRCREG == `SrcTypeRegister) begin
 			src <= reglist[ir1 `SRCREG];
 		end
-		if(((ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) begin
+		if( ( (ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) ) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 		end
 		ir2 <= ir1;
@@ -168,7 +166,7 @@ always @(posedge clk) begin //should handle selection of source?
 	end else begin
 		if(ir2[15] == 1'b0) begin
 				case(ir2 `SRCREG)
-					`SrcTypeI4$: begin src <= ir2 `SRCREG; end // Is this correct?
+					`SrcTypeI4Undo: begin src <= ir2 `SRCREG; end // Is this correct?
 					`SrcTypeMem: begin src <= datamem[ir2 `SRCREG]; end
 					default: begin end
 				endcase 
@@ -178,7 +176,9 @@ always @(posedge clk) begin //should handle selection of source?
 end
 // stage4: execute and write
 always @(posedge clk) begin
-	
+	if (ir3 != `Nop) begin
+		halt <= 1;
+	end	
 	
 end
 
