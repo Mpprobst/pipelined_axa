@@ -80,6 +80,9 @@
 
 
 
+
+
+
 module processor(halt, reset, clk);
 output reg halt;
 input reset, clk;
@@ -87,9 +90,15 @@ input reset, clk;
 reg `DATA reglist `REGSIZE;  //register file
 reg `DATA datamem `SIZE;  //data memory
 reg `INSTRUCTION instrmem `SIZE;  //instruction memory
-reg `DATA pc = 0;
+reg `DATA pc,tpc;
+reg `DATA passreg;   //This is the temp register to hold the source
 reg `INSTRUCTION ir0, ir1, ir2, ir3; //instruction registers for each stage 
+reg jump;  //is jump or not
+reg branch; //is branch or not
+reg `ADDRESS target;
+reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s;
+wire `DATA aluout;
 
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
@@ -98,6 +107,11 @@ reg `DATA u `USIZE;  //undo stack
 always @(reset) begin
 	halt <= 0;
 	pc <= 0;
+	ir1= `Nop;
+	ir2= `Nop;
+	ir3= `Nop;
+	jump=0;
+	branch=0;
 	s <= `Start;
 //Setting initial values
     $readmemh0(reglist); //Registers
@@ -107,44 +121,36 @@ end
 
 //start pipeline
 
+//Stage1: Fetch
+always @(posedge clk) begin
+
+if(jump) begin
+	tpc= target;
+end else if(branch) begin
+	tpc= pc + passreg-1;
+end else begin
+	tpc=pc;
+end
+
+if(wait1) begin
+	pc<= tpc;
+end else begin
+	ir0= reglist[tpc];
+
+	ir1<= ir0;
+	pc<= tpc+1;
+end
+
+
+end //always block
 
 // stage4: execute and write
 always @(posedge clk) begin
-
-	`OPxhi: begin regfile[ir3 `IDEST] <= {regfile[ir3 `IDEST]`WHIGH ^ src`WLOW, regfile[ir3 `IDEST]`WLOW}; st <= `Start; end
-	`OPxlo: begin regfile[ir3 `IDEST] <= {regfile[ir3 `IDEST]`WHIGH, regfile[ir3 `IDEST]`WLOW ^ src`WLOW}; st <= `Start; end
-	`OPlhi: begin regfile[ir3 `IDEST] <= {src `WLOW, 8'b0}; st <= `Start; end
-	`OPllo: begin regfile[ir3 `IDEST] <= src;               st <= `Start; end
-	`OPadd: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] + src;  st <= `Start; end
-	`OPsub: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] - src;  st <= `Start; end
-	`OPxor: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] ^ src;  st <= `Start; end
-	`OProl: begin regfile[ir3 `IDEST] <= ( (regfile[ir3 `IDEST] << src) | (regfile[ir3 `IDEST] >> (16-src)) ); st <= `Start; end
-	`OPshr: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] >> src; st <= `Start; end
-	`OPor:  begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] | src;  st <= `Start; end
-	`OPand: begin regfile[ir3 `IDEST] <= regfile[ir3 `IDEST] & src;  st <= `Start; end
-	`OPdup: begin regfile[ir3 `IDEST] <= src;                     st <= `Start; end
-
-// this may not work in pipelined design
-`define DO_BRANCH pc <= ((ir `SRCTYPE == `SrcTypeI4) ? pc + src - 1 : src)
-
-	`OPbz:  begin if (regfile[ir3 `IDEST] == 0) `DO_BRANCH; st <= `Start; end
-	`OPbnz: begin if (regfile[ir3 `IDEST] != 0) `DO_BRANCH; st <= `Start; end
-	`OPbn:  begin if ($signed(regfile[ir3 `IDEST]) < 0)  `DO_BRANCH; st <= `Start; end
-	`OPbnn: begin if ($signed(regfile[ir3 `IDEST]) >= 0) `DO_BRANCH; st <= `Start; end
 	
-	`OPex:  begin datamem[regfile[ir3 'ILSRC] <= regfile[ir3 `IDEST]; regfile[ir3 `IDEST] <= src;  st <= `Start end
-
-	// NOPs (not implemented in this project)
-	`OPland: begin st <= `Start; end
-	`OPjerr: begin st <= `Start; end
-	`OPcom:  begin st <= `Start; end
-
-	// HALTs
-	`OPfail: begin halt <= 1; end // Not implemented in this project
-	`OPsys:  begin halt <= 1; end
-	default: begin halt <= 1; end
-
+	
 end
+
+endmodule
 
 module testbench;
 reg reset = 0;
