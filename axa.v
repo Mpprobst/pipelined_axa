@@ -303,7 +303,8 @@ always @(posedge clk) begin
 			end
 		endcase	
 
-		if (setsdes(ir3)) begin // check if we are ready to push to the des 
+
+		if (setsdes(ir3)) begin // check if we are ready to set the des 
 			des <= res;
 			$display("res: %d", res);
 		end // if (1)
