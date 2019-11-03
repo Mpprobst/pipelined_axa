@@ -172,9 +172,21 @@ always @(posedge clk) begin
 	end else begin
 		wait1 = 0;
 		des <= reglist[ir0 `DESTREG];
+		
+		if(ir1 `SRC8MSB == 1'b0) begin
+			case(ir1 `SRCTYPE)
+				`SrcTypeRegister: begin src <= reglist[ir1 `SRCREG]; end
+				`SrcTypeI4Undo: begin src <= ir1 `SRCREG; end // Is this correct?
+				`SrcTypeI4: begin src <= ir1 `SRCREG; end
+				default: begin end
+			endcase 
+		end else begin 
+			src <= ir1 `SRC8;
+		end
+		
 		if( ( (ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) ) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
-		end	
+		end
 		ir2 <= ir1;
 	end
 end
@@ -183,20 +195,13 @@ end
 always @(posedge clk) begin //should handle selection of source?
 	if(ir2 == `Nop) begin
 	end else begin
-		if(ir2[15] == 1'b0) begin
-				case(ir2 `SRCREG)
-					`SrcTypeRegister: begin src <= reglist[ir2 `SRCREG]; end
-					`SrcTypeI4Undo: begin src <= ir2 `SRCREG; end // Is this correct?
-					`SrcTypeI4: begin src <= ir2 `SRCREG; end
-					`SrcTypeMem: begin memreg <= datamem[ir2 `SRCREG]; end
-					default: begin end
-				endcase 
-		end else begin
-				src <= ir2 `SRC8;
+		if(ir2 `SRCREG == `SrcTypeMem) begin
+			src <= datamem[ir2 `SRCREG];
 		end
 	end
 	ir3 <= ir2;
 end
+
 // stage4: execute and write
 always @(posedge clk) begin
 	if (ir3 != `Nop) begin
