@@ -307,7 +307,7 @@ always @(posedge clk) begin
 			end
 		endcase	
 
-		if (setsdes(op4)) begin // check if we are ready to push to the des 
+		if (setsdes(op4)) begin // check if we are ready to set the des 
 			des <= res;
 			$display("res: %d", res);
 		end // if (1)

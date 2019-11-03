@@ -38,7 +38,7 @@ Alex Schuster\\
     This processor design was created following the AXA assembler instruction set provided by Dr. Hank Dietz. All instructions are implemented with the forward instruction only and push and pull to the UNDO buffer needed for reverse instructions. \\
     The pipeline design is based on a multi-cycle design provided by Alex Schuster's team. For the design of the pipeline, there will be five stages. Stage 1 is an instruction fetch. Stage 2 is a register read. Stage 3 is a data memory access. Stage 4 is an ALU operation and the register write. \\ 
     Stage 1 of the pipeline will increment pc counter as well as fetch the instruction. When it is able to succeed with this, an instruction register tied to stage 2 will be set to allow Stage 2 to progress. Stage 1 will handle all jumps by setting the pc counter to the jump address. This stage will also pass the src type between stages. For example, if an instruction contains an I4 source, the source will be passed to stage 3. This stage will write the PC to the undo buffer if the \textbf{land} command is received. \\
-    Stage 2 of the pipeline will handle register reading of the pipeline. This involves reading the src value of a register is sent with an instruction. if the from the registers are taken correctly then Stage 3 is able to run. This stage also stores the destination register in the undo buffer if the following instructions are given: \textbf{lhi,llo,or,dup,and,shr}. Stage 2 checks to see if the previous instruction and the next instruciton that Stage 1 provides have data dependicies. If they do we wait until the current instruciton is finished.\\
+    Stage 2 of the pipeline will handle register reading of the pipeline. This involves reading the src value of a register is sent with an instruction. if the from the registers are taken correctly then Stage 3 is able to run. This stage also stores the destination register in the undo buffer if the following instructions are given: \textbf{lhi,llo,or,dup,and,shr}. Stage 2 checks to see if the previous instruction and the next instruction that Stage 1 provides have data dependencies. If they do we wait until the current instruction is finished.\\
     Stage 3 of the pipeline will handle the data memory accessing of the pipeline. If an address to a memory is sent with the instruction. This stage will handle accessing the data. If there is no address sent, then Stage 3 will pass on the src type found in Stage 1 or Stage 2 depending on the type via a mux. If the data contains info for a jump, that is fed back to stage 1.\\
     Stage 4 of the pipeline will handle ALU operations and writing to the register file. 
     \\
@@ -73,7 +73,7 @@ Alex Schuster\\
 \section{Issues}
 There were no issues with implementation and testing.
 \section{References}
-    This implementated used PinKY from EE480 Fall 2018 pipeline as a reference.\\
+    This implementation used PinKY from EE480 Fall 2018 pipeline as a reference.\\
     This can be found at \\
     http://aggregate.org/EE480/pipepinky.html
 =======
@@ -118,7 +118,7 @@ Alex Schuster\\
     Stage 1 of the pipeline will increment pc counter as well as fetch the instruction. When it is able to succeed with this, an instruction register tied to stage 2 will be set to allow Stage 2 to progress. Stage 1 will handle all jumps by setting the pc counter to the jump address. This stage will also pass the src type between stages. For example, if an instruction contains an I4 source, the source will be passed to stage 3. This stage will write the PC to the undo buffer if the \textbf{land} command is received. \\
     Stage 2 of the pipeline will handle register reading of the pipeline. This involves reading the src value of a register is sent with an instruction. if the from the registers are taken correctly then Stage 3 is able to run. This stage also stores the destination register in the undo buffer if the following instructions are given: \textbf{lhi,llo,or,dup,and,shr}. Stage 2 checks to see if the previous instruction and the next instruciton that Stage 1 provides have data dependicies. If they do we wait until the current instruciton is finished.\\
     Stage 3 of the pipeline will handle the data memory accessing of the pipeline. If an address to a memory is sent with the instruction. This stage will handle accessing the data. If there is no address sent, then Stage 3 will pass on the src type found in Stage 1 or Stage 2 depending on the type via a mux. If the data contains info for a jump, that is fed back to stage 1.\\
-    Stage 4 of the pipeline will handle ALU operations and writing to the register file. 
+    Stage 4 of the pipeline will handle ALU operations and writing to the register file.  
     \\
     The processor design works by using 16 bit word instructions that allocate the following bits for any instruction:\\
                 \centerline{\textbf{OPCODE}: 6 Bits}\\
