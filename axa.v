@@ -13,7 +13,7 @@
 `define OPPUSH		[14]
 `define OP8IMM		[15]
 `define SRCTYPE		[9:8]
-`define IDEST		[3:0]
+`define DESTREG		[3:0]
 `define SRCREG		[7:4]
 `define SRCREGMSB 	[7]
 `define SRC8		[11:4]
@@ -79,6 +79,26 @@
 `define OPxhi2					7'b1011000
 `define OPxhi3					7'b1011001
 
+module ALU(out, in1, in2, op);
+parameter BITS = 16;
+output reg [BITS-1:0] out;
+input `REGSIZE in1, in2;
+input `OPERATION_BITS op;
+reg `REGSIZE a;
+reg `REGSIZE temp;
+always @(in1 or in2 or op) begin #1
+	case(op)
+		`OPadd: begin out <= in1 + in2; end
+		`OPsub: begin out <= in1 - in2; end
+		`OPxor: begin out <= in1 ^ in2; end
+		`OProl: begin out <= {in1 << in2, in1 >> (BITS - in2)}; end
+		`OPshr: begin out <= in1 >> in2; end
+		`OPor:  begin out <= in1 | in2; end
+		`OPand: begin out <= in1 & in2; end
+        endcase
+end
+
+endmodule
 
 module processor(halt, reset, clk);
 output reg halt;
@@ -88,15 +108,17 @@ reg `DATA reglist `REGSIZE;  //register file
 reg `DATA datamem `SIZE;  //data memory
 reg `INSTRUCTION instrmem `SIZE;  //instruction memory
 reg `DATA pc,tpc;
-reg `DATA passreg;   //This is the temp register to hold the source
+reg `DATA passreg;   //This is the temp register to hold the source NOTE: src is used in stage 3, is this needed?
 reg `INSTRUCTION ir0, ir1, ir2, ir3; //instruction registers for each stage 
 reg jump;  //is jump or not
 reg branch; //is branch or not
 reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
-reg `STATE s;
-reg `DATA des, src;
+reg `STATE s, sLA;
+reg `DATA des, src, memreg;
 wire `DATA aluout;
+
+ALU opalu(aluout, des, src, sLA);
 
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
@@ -112,7 +134,7 @@ always @(reset) begin
 	branch=0;
 	s <= `Start;
 //Setting initial values
-    $readmemh0(reglist); //Registers
+	$readmemh0(reglist); //Registers
 	$readmemh1(datamem); //Data
 	$readmemh2(instrmem); //Instructions
 end
@@ -122,21 +144,21 @@ end
 //Stage1: Fetch
 always @(posedge clk) begin
 
-if(jump) begin
-	tpc= target;
-end else if(branch) begin
-	tpc= pc + passreg-1;
-end else begin
-	tpc=pc;
+	if(jump) begin
+		tpc= target;
+	end else if(branch) begin
+		tpc= pc + src-1;
+	end else begin
+		tpc=pc;
 end
 
-if(wait1) begin
-	pc<= tpc;
-end else begin
-	ir0= reglist[tpc];
+	if(wait1) begin
+		pc<= tpc;
+	end else begin
+		ir0= instrmem[tpc];
 
-	ir1<= ir0;
-	pc<= tpc+1;
+		ir1<= ir0;
+		pc<= tpc+1;
 end
 
 
@@ -144,12 +166,12 @@ end //always block
 
 //stage2: register read
 always @(posedge clk) begin  
-	if(ir1 != `Nop) begin //NEED MORE CONDITIONS for example registers between ir1 and ir2
+	if(ir1 != `Nop && 0) begin //NEED MORE CONDITIONS for example registers between ir1 and ir2
 		wait1 = 1;
 		ir2 <= `Nop;
 	end else begin
 		wait1 = 0;
-		des <= reglist[ir0 `IDEST];
+		des <= reglist[ir0 `DESTREG];
 		if( ( (ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) ) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 		end	
@@ -166,7 +188,7 @@ always @(posedge clk) begin //should handle selection of source?
 					`SrcTypeRegister: begin src <= reglist[ir2 `SRCREG]; end
 					`SrcTypeI4Undo: begin src <= ir2 `SRCREG; end // Is this correct?
 					`SrcTypeI4: begin src <= ir2 `SRCREG; end
-					`SrcTypeMem: begin src <= datamem[ir2 `SRCREG]; end
+					`SrcTypeMem: begin memreg <= datamem[ir2 `SRCREG]; end
 					default: begin end
 				endcase 
 		end else begin
@@ -178,11 +200,141 @@ end
 // stage4: execute and write
 always @(posedge clk) begin
 	if (ir3 != `Nop) begin
-		halt <= 1;
-	end	
-	
+		$display("state: %d", s);
+		case(s)
+		`Start: begin
+			s <= `Decode;
+			end
+
+		`Decode: begin
+			// Change to if statement to combine states?
+			if (ir3 `OP8IMM) begin
+				$display("8immed op");
+				s <= `DecodeI8;
+			end else begin
+				$display("decode2");
+				s <= `Decode2;
+			end
 end
 
+
+		// Regular Instruction
+		`Decode2: begin
+			$display("decode2");
+			// Grab the next state
+			case (ir3 `OP)
+				`OPland: s <= `Nop;
+				`OPcom: s <= `Nop;
+				`OPjerr: s <= `Nop;
+				`OPfail: s <= `Done;
+				`OPsys: s <= `Done;
+
+			endcase
+
+			sLA <= ir3 `OP;
+			end
+
+		// I8 instruction
+		`DecodeI8: begin
+			case (ir3 `OP8)
+				`OPxhiCheck: sLA <= `OPxhi;
+				`OPxloCheck: sLA <= `OPxlo;
+				`OPlhiCheck: sLA <= `OPlhi;
+				`OPlloCheck: sLA <= `OPllo;
+				default: halt <= 1;
+			endcase
+
+			s <= `SrcI8;
+			end
+
+		// Begin OPCODE States
+
+	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; s <= `OPxor; end
+		`OPxhi: begin $display("xhi des:%d src:%d", des, src); reglist[12] <= src << 8; s <= `OPxhi2; end
+		`OPxhi2: begin $display("xhi2 des:%d src:%d", des, src); src <= reglist[12]; s <= `OPxor; end
+		//`OPxhi3: begin  <= des; s <= `OPxor; end
+		//`ALUOUT: begin des <= aluout; s <= `Start; end
+		`OPllo: begin $display("llo des:%d src:%d", des, src); des <= {{8{src[7]}}, src}; s <=`Start; end
+		`OPlhi: begin $display("lhi des:%d src:%d", des, src); des <= {src, 8'b0}; s <=`Start; end
+		`OPand: begin $display("and des:%d src:%d", des, aluout); des <= aluout; s <=`Start; end
+		`OPor:	begin $display("or des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OPxor: begin $display("xor des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OPadd: begin $display("add des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OProl: begin $display("rol des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OPshr: begin $display("shr des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+		`OPbzjz: begin if(des==0)
+		begin $display("bz des:%d src:%d", des, src);
+			if(ir3 `SRCTYPE == 2'b01)
+			begin
+
+				pc <= pc+src-1;
+			end
+			else
+			begin
+				pc <= src;
+			end
+
+		end
+		s <= `Start;
+		end
+
+		`OPbnzjnz: begin if(des!=0)
+		begin $display("bnz des:%d src:%d", des, src);
+			if(ir3 `SRCTYPE == 2'b01)
+			begin
+				pc <= pc+src-1;
+			end
+			else
+			begin
+				pc <= src;
+			end
+
+		end
+		s <= `Start;
+		end
+
+		`OPbnjn: begin if(des[15]==1)
+		begin $display("bn des:%d src:%d", des, src);
+			if(ir3 `SRCTYPE == 2'b01)
+			begin
+				pc <= pc+src-1;
+			end
+			else
+			begin
+				pc <= src;
+			end
+
+		end
+		s <= `Start;
+		end
+
+		`OPbnnjnn: begin if(des[15]==0)
+		begin $display("bnn des:%d src:%d", des, src);
+			if(ir3 `SRCTYPE == 2'b01)
+			begin
+				pc <= pc+src-1;
+			end
+			else
+			begin
+				pc <= src;
+			end
+
+		end
+		s <= `Start;
+		end
+
+		`Nop: s <= `Start;
+		`OPdup: begin $display("dup des:%d src:%d", des, src); des <= src; s <= `Start; end
+		`OPex: begin $display("ex des:%d src:%d", des, src); memreg <= des; des <= memreg; s <= `Start; end
+		default: begin
+
+			halt <= 1;
+			end
+		endcase	
+	
+	end // if (ir3 != `Nop)
+end //  always
 endmodule
 
 module testbench;
