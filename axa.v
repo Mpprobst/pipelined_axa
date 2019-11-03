@@ -75,30 +75,8 @@
 `define SrcI8 					7'b1001011
 `define SrcMem					7'b1001100
 `define Done					6'b111101
-`define ALUOUT					7'b1010010
 `define OPxhi2					7'b1011000
 `define OPxhi3					7'b1011001
-
-module ALU(out, in1, in2, op);
-parameter BITS = 16;
-output reg [BITS-1:0] out;
-input `REGSIZE in1, in2;
-input `OPERATION_BITS op;
-reg `REGSIZE a;
-reg `REGSIZE temp;
-always @(in1 or in2 or op) begin #1
-	case(op)
-		`OPadd: begin out <= in1 + in2; end
-		`OPsub: begin out <= in1 - in2; end
-		`OPxor: begin out <= in1 ^ in2; end
-		`OProl: begin out <= {in1 << in2, in1 >> (BITS - in2)}; end
-		`OPshr: begin out <= in1 >> in2; end
-		`OPor:  begin out <= in1 | in2; end
-		`OPand: begin out <= in1 & in2; end
-        endcase
-end
-
-endmodule
 
 module processor(halt, reset, clk);
 output reg halt;
@@ -115,10 +93,9 @@ reg branch; //is branch or not
 reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s, sLA;
+reg `OP op4; // opcode for stage 4
 reg `DATA des, src, memreg;
 wire `DATA aluout;
-
-ALU opalu(aluout, des, src, sLA);
 
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
@@ -130,9 +107,9 @@ always @(reset) begin
 	ir1= `Nop;
 	ir2= `Nop;
 	ir3= `Nop;
+	op4 <= `Nop;
 	jump=0;
 	branch=0;
-	s <= `Start;
 //Setting initial values
 	$readmemh0(reglist); //Registers
 	$readmemh1(datamem); //Data
@@ -156,7 +133,7 @@ end
 		pc<= tpc;
 	end else begin
 		ir0= instrmem[tpc];
-
+		
 		ir1<= ir0;
 		pc<= tpc+1;
 end
@@ -205,9 +182,10 @@ end
 // stage4: execute and write
 always @(posedge clk) begin
 	if (ir3 != `Nop) begin
-		$display("state: %d", s);
-		case(s)
-		`Start: begin
+		op4 <= ir3 `OP;
+		$display("state: %d", op4);
+		case(op4)
+		/*`Start: begin
 			s <= `Decode;
 			end
 
@@ -251,23 +229,23 @@ end
 
 			s <= `SrcI8;
 			end
-
+		*/
 		// Begin OPCODE States
 
-	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; s <= `OPxor; end
-		`OPxhi: begin $display("xhi des:%d src:%d", des, src); reglist[12] <= src << 8; s <= `OPxhi2; end
-		`OPxhi2: begin $display("xhi2 des:%d src:%d", des, src); src <= reglist[12]; s <= `OPxor; end
-		//`OPxhi3: begin  <= des; s <= `OPxor; end
-		//`ALUOUT: begin des <= aluout; s <= `Start; end
-		`OPllo: begin $display("llo des:%d src:%d", des, src); des <= {{8{src[7]}}, src}; s <=`Start; end
-		`OPlhi: begin $display("lhi des:%d src:%d", des, src); des <= {src, 8'b0}; s <=`Start; end
-		`OPand: begin $display("and des:%d src:%d", des, aluout); des <= aluout; s <=`Start; end
-		`OPor:	begin $display("or des:%d src:%d", des, src); des <= aluout; s <=`Start; end
-		`OPxor: begin $display("xor des:%d src:%d", des, src); des <= aluout; s <=`Start; end
-		`OPadd: begin $display("add des:%d src:%d", des, src); des <= aluout; s <=`Start; end
-		`OPsub: begin $display("sub des:%d src:%d", des, src); des <= aluout; s <=`Start; end
-		`OProl: begin $display("rol des:%d src:%d", des, src); des <= aluout; s <=`Start; end
-		`OPshr: begin $display("shr des:%d src:%d", des, src); des <= aluout; s <=`Start; end
+	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; op4 <= `OPxor; end
+		`OPxhi: begin $display("xhi des:%d src:%d", des, src); reglist[12] <= src << 8; op4 <= `OPxhi2; end
+		`OPxhi2: begin $display("xhi2 des:%d src:%d", des, src); src <= reglist[12]; op4 <= `OPxor; end
+		//`OPxhi3: begin  <= des; op4 <= `OPxor; end
+		//`ALUOUT: begin des <= aluout; op4 <= `Nop; end
+		`OPllo: begin $display("llo des:%d src:%d", des, src); des <= {{8{src[7]}}, src}; op4 <=`Nop; end
+		`OPlhi: begin $display("lhi des:%d src:%d", des, src); des <= {src, 8'b0}; op4 <=`Nop; end
+		`OPand: begin $display("and des:%d src:%d", des, aluout); des <= des & src; op4 <=`Nop; end
+		`OPor:	begin $display("or des:%d src:%d", des, aluout); des <= des | src; op4 <=`Nop; end
+		`OPxor: begin $display("xor des:%d src:%d", des, aluout); des <= des ^ src; op4 <=`Nop; end
+		`OPadd: begin $display("add des:%d src:%d", des, aluout); des <= des + src; op4 <=`Nop; end
+		`OPsub: begin $display("sub des:%d src:%d", des, aluout); des <= des - src; op4 <=`Nop; end
+		`OProl: begin $display("rol des:%d src:%d", des, aluout); des <= ( (des << src) | (des >> (16-src)) ); op4 <=`Nop; end
+		`OPshr: begin $display("shr des:%d src:%d", des, aluout); des <= des >> src; op4 <=`Nop; end
 		`OPbzjz: begin if(des==0)
 		begin $display("bz des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
@@ -281,7 +259,7 @@ end
 			end
 
 		end
-		s <= `Start;
+		op4 <= `Nop;
 		end
 
 		`OPbnzjnz: begin if(des!=0)
@@ -296,7 +274,7 @@ end
 			end
 
 		end
-		s <= `Start;
+		op4 <= `Nop;
 		end
 
 		`OPbnjn: begin if(des[15]==1)
@@ -311,7 +289,7 @@ end
 			end
 
 		end
-		s <= `Start;
+		op4 <= `Nop;
 		end
 
 		`OPbnnjnn: begin if(des[15]==0)
@@ -326,12 +304,12 @@ end
 			end
 
 		end
-		s <= `Start;
+		op4 <= `Nop;
 		end
 
-		`Nop: s <= `Start;
-		`OPdup: begin $display("dup des:%d src:%d", des, src); des <= src; s <= `Start; end
-		`OPex: begin $display("ex des:%d src:%d", des, src); memreg <= des; des <= memreg; s <= `Start; end
+		`Nop: op4 <= `Start;
+		`OPdup: begin $display("dup des:%d src:%d", des, src); des <= src; op4 <= `Nop; end
+		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; des <= src; op4 <= `Nop; end
 		default: begin
 
 			halt <= 1;
