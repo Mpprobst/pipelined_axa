@@ -100,6 +100,22 @@ reg `DATA des, src, res;
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
 
+function usesdes;
+input `INST inst;
+usesdes = ((inst `OP == `OPand) ||
+          (inst `OP == `OPor) ||
+          (inst `OP == `OPxor) ||
+          (inst `OP == `OPadd) ||
+          (inst `OP == `OPsub) ||
+          (inst `OP == `OProl) ||
+          (inst `OP == `OPshr) ||
+          (inst `OP == `OPex) ||
+          (inst `OP == `OPxhi) ||
+          (inst `OP == `OPxlo) ||
+          (inst `OP == `OPllo) ||
+          (inst `OP == `OPlhi));
+endfunction
+
 always @(reset) begin
 	halt <= 0;
 	pc <= 0;
@@ -353,7 +369,7 @@ always @(posedge clk) begin
 			end
 		endcase	
 
-		if (1) begin // check if we are ready to push to the des 
+		if (usesdes(op4)) begin // check if we are ready to push to the des 
 			des <= res;
 			$display("res: %d", res);
 		end // if (1)
