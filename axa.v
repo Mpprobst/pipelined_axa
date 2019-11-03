@@ -111,7 +111,7 @@ always @(reset) begin
 	jump=0;
 	branch=0;
 	land=0;
-	s <= `Start;
+	res <= 0;
 //Setting initial values
 	$readmemh0(reglist); //Registers
 	$readmemh1(datamem); //Data
@@ -272,19 +272,19 @@ always @(posedge clk) begin
 		*/
 		// Begin OPCODE States
 
-	    	`OPxlo: begin $display("xlo res:%d src:%d", res, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
-		`OPxhi: begin $display("xhi res:%d src:%d", res, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
-		`OPllo: begin $display("llo res:%d src:%d", res, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
-		`OPlhi: begin $display("lhi res:%d src:%d", res, src); res <= {src, 8'b0}; op4 <=`OPnop; end
-		`OPand: begin $display("and res:%d src:%d", res, src); res <= des & src; op4 <=`OPnop; end
-		`OPor:	begin $display("or res:%d src:%d", res, src); res <= des | src; op4 <=`OPnop; end
-		`OPxor: begin $display("xor res:%d src:%d", res, src); res <= des ^ src; op4 <=`OPnop; end
-		`OPadd: begin $display("add res:%d src:%d", res, src); res <= des + src; op4 <=`OPnop; end
-		`OPsub: begin $display("sub res:%d src:%d", res, src); res <= des - src; op4 <=`OPnop; end
-		`OProl: begin $display("rol res:%d src:%d", res, src); res <= ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
-		`OPshr: begin $display("shr res:%d src:%d", res, src); res <= des >> src; op4 <=`OPnop; end
+	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
+		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
+		`OPllo: begin $display("llo des:%d src:%d", des, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
+		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res <= {src, 8'b0}; op4 <=`OPnop; end
+		`OPand: begin $display("and des:%d src:%d", des, src); res <= des & src; op4 <=`OPnop; end
+		`OPor:	begin $display("or des:%d src:%d", des, src); res <= des | src; op4 <=`OPnop; end
+		`OPxor: begin $display("xor des:%d src:%d", des, src); res <= des ^ src; op4 <=`OPnop; end
+		`OPadd: begin $display("add des:%d src:%d", des, src); res <= des + src; op4 <=`OPnop; end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); res <= des - src; op4 <=`OPnop; end
+		`OProl: begin $display("rol des:%d src:%d", des, src); res <= ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
+		`OPshr: begin $display("shr des:%d src:%d", des, src); res <= des >> src; op4 <=`OPnop; end
 		`OPbzjz: begin if(des==0)
-		begin $display("bz res:%d src:%d", res, src);
+		begin $display("bz des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 
@@ -300,7 +300,7 @@ always @(posedge clk) begin
 		end
 
 		`OPbnzjnz: begin if(des!=0)
-		begin $display("bnz res:%d src:%d", res, src);
+		begin $display("bnz des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -315,7 +315,7 @@ always @(posedge clk) begin
 		end
 
 		`OPbnjn: begin if(des[15]==1)
-		begin $display("bn res:%d src:%d", res, src);
+		begin $display("bn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -330,7 +330,7 @@ always @(posedge clk) begin
 		end
 
 		`OPbnnjnn: begin if(des[15]==0)
-		begin $display("bnn res:%d src:%d", res, src);
+		begin $display("bnn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -345,8 +345,8 @@ always @(posedge clk) begin
 		end
 
 		`OPnop: op4 <= `OPnop;
-		`OPdup: begin $display("dup res:%d src:%d", res, src); res <= src; op4 <= `OPnop; end
-		`OPex: begin $display("ex res:%d src:%d", res, src); src <= des; res <= src; op4 <= `OPnop; end
+		`OPdup: begin $display("dup des:%d src:%d", des, src); res <= src; op4 <= `OPnop; end
+		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
 		default: begin
 
 			halt <= 1;
@@ -355,7 +355,7 @@ always @(posedge clk) begin
 
 		if (1) begin // check if we are ready to push to the des 
 			des <= res;
-			$display("des: %d", des);
+			$display("res: %d", res);
 		end // if (1)
 	
 	end // if (ir3 != `Nop)
