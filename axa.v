@@ -100,6 +100,7 @@ end
 
 endmodule
 
+	
 module processor(halt, reset, clk);
 output reg halt;
 input reset, clk;
@@ -139,6 +140,34 @@ always @(reset) begin
 	$readmemh2(instrmem); //Instructions
 end
 
+function setsdes;
+	input `INSTRUCTION inst;
+	setsdes = (((inst`OP >= `OPadd) && (inst `OP <= `OProl)) ||
+				((inst`OP >= `OPshr) && (inst `OP <= `OPdup)) ||
+				 (inst `OP == `OPxhi) ||
+				 (inst `OP == `OPxlo) ||
+				 (inst `OP == `OPlhi) ||
+				 (inst `OP == `OPllo)
+				);
+endfunction
+function usesdes;
+	input `INSTRUCTION inst;
+	usesdes = (((inst`OP >= `OPadd) && (inst `OP <= `OProl)) ||
+				((inst`OP >= `OPshr) && (inst `OP <= `OPdup)) ||
+				((inst`OP >= `OPbzjz) && (inst `OP <= `OPbnnjnn)) ||
+				 (inst `OP == `OPxhi) ||
+				 (inst `OP == `OPxlo) //||
+				 //(inst `OP == `OPlhi) ||
+				 //(inst `OP == `OPllo)
+				);
+endfunction
+
+function usessrc;
+	input `INSTRUCTION inst;
+	usessrc = (((inst`OP >= `OPadd) && (inst `OP <= `OProl)) ||
+				((inst`OP >= `OPshr) && (inst `OP <= `OPdup)));
+endfunction
+
 //start pipeline
 
 //Stage1: Fetch
@@ -166,14 +195,14 @@ end //always block
 
 //stage2: register read
 always @(posedge clk) begin  
-	if(ir1 != `Nop && 0) begin //NEED MORE CONDITIONS for example registers between ir1 and ir2
+	if((ir1 != `Nop) && setsdes(ir1) && ((usesdes(ir1) && (ir1 `DESTREG == ir2 `DESTREG)) || (usessrc(ir1) && (ir1 `SRCREG == ir2 `DESTREG)))) begin 
 		wait1 = 1;
 		ir2 <= `Nop;
 	end else begin
 		wait1 = 0;
 		des <= reglist[ir0 `DESTREG];
 		
-		if(ir1 `SRC8MSB == 1'b0) begin
+		if(ir1 `OP8IMM == 1'b0) begin
 			case(ir1 `SRCTYPE)
 				`SrcTypeRegister: begin src <= reglist[ir1 `SRCREG]; end
 				`SrcTypeI4Undo: begin src <= ir1 `SRCREG; end // Is this correct?
@@ -184,7 +213,7 @@ always @(posedge clk) begin
 			src <= ir1 `SRC8;
 		end
 		
-		if( ( (ir1 `OP >= `OPshr) && (ir1 `OP <= `OPdup))|| (ir1 `OP == `OPlhi) || (ir1 `OP == `OPllo) ) begin
+		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 		end
 		ir2 <= ir1;
@@ -212,15 +241,15 @@ always @(posedge clk) begin
 			end
 
 		`Decode: begin
-			// Change to if statement to combine states?
-			if (ir3 `OP8IMM) begin
-				$display("8immed op");
-				s <= `DecodeI8;
-			end else begin
-				$display("decode2");
-				s <= `Decode2;
+				// Change to if statement to combine states?
+				if (ir3 `OP8IMM) begin
+					$display("8immed op");
+					s <= `DecodeI8;
+				end else begin
+					$display("decode2");
+					s <= `Decode2;
+				end
 			end
-end
 
 
 		// Regular Instruction
@@ -254,7 +283,7 @@ end
 
 		// Begin OPCODE States
 
-	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; s <= `OPxor; end
+	    `OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; s <= `OPxor; end
 		`OPxhi: begin $display("xhi des:%d src:%d", des, src); reglist[12] <= src << 8; s <= `OPxhi2; end
 		`OPxhi2: begin $display("xhi2 des:%d src:%d", des, src); src <= reglist[12]; s <= `OPxor; end
 		//`OPxhi3: begin  <= des; s <= `OPxor; end
