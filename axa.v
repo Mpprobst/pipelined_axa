@@ -112,6 +112,7 @@ reg `DATA passreg;   //This is the temp register to hold the source NOTE: src is
 reg `INSTRUCTION ir0, ir1, ir2, ir3; //instruction registers for each stage 
 reg jump;  //is jump or not
 reg branch; //is branch or not
+reg land;
 reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s, sLA;
@@ -127,11 +128,13 @@ reg `DATA u `USIZE;  //undo stack
 always @(reset) begin
 	halt <= 0;
 	pc <= 0;
+	usp=0;
 	ir1= `Nop;
 	ir2= `Nop;
 	ir3= `Nop;
 	jump=0;
 	branch=0;
+	land=0;
 	s <= `Start;
 //Setting initial values
 	$readmemh0(reglist); //Registers
@@ -150,7 +153,13 @@ always @(posedge clk) begin
 		tpc= pc + src-1;
 	end else begin
 		tpc=pc;
-end
+	end
+
+	if(land) begin
+		u[usp]=tpc;
+		usp= usp+1;
+	end
+
 
 	if(wait1) begin
 		pc<= tpc;
@@ -173,7 +182,7 @@ always @(posedge clk) begin
 		wait1 = 0;
 		des <= reglist[ir0 `DESTREG];
 		
-		if(ir1 `SRC8MSB == 1'b0) begin
+		if(ir1 `OP8IMM == 1'b0) begin
 			case(ir1 `SRCTYPE)
 				`SrcTypeRegister: begin src <= reglist[ir1 `SRCREG]; end
 				`SrcTypeI4Undo: begin src <= ir1 `SRCREG; end // Is this correct?
