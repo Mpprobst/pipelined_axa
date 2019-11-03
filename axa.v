@@ -67,7 +67,7 @@
 `define Decode					7'b1100000
 `define Decode2 				7'b1100001
 `define DecodeI8 				7'b1100010
-`define Nop					7'b1000010
+`define Nop					    7'b1000010
 `define SrcType					7'b1001000
 `define SrcRegister				7'b1001001
 `define SrcI4					7'b1001010
@@ -101,17 +101,19 @@ reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
 
 always @(reset) begin
-	halt <= 0;
-	pc <= 0;
+	halt = 0;
+	pc = 0;
 	usp=0;
 	ir1= `Nop;
 	ir2= `Nop;
 	ir3= `Nop;
-	op4 <= `Nop;
+	op4 = `Nop;
+	des = 0;
+	src = 0;
 	jump=0;
 	branch=0;
 	land=0;
-	res <= 0;
+	res = 0;
 //Setting initial values
 	$readmemh0(reglist); //Registers
 	$readmemh1(datamem); //Data
@@ -162,16 +164,16 @@ always @(posedge clk) begin
 	end
 
 	if(land) begin
-		u[usp]=tpc;
-		usp= usp+1;
-		land=0;
+		u[usp]<=tpc;
+		usp<= usp+1;
+		land<=0;
 	end
 
 
 	if(wait1) begin
 		pc<= tpc;
 	end else begin
-		ir0= instrmem[tpc];
+		ir0 = instrmem[tpc];
 		ir1<= ir0;
 		pc<= tpc+1;
 end
@@ -186,8 +188,7 @@ always @(posedge clk) begin
 		ir2 <= `Nop;
 	end else begin
 		wait1 = 0;
-		des <= reglist[ir0 `DESTREG];
-		
+		des <= reglist[ir1 `DESTREG];
 		if(ir1 `OP8IMM == 1'b0) begin
 			case(ir1 `SRCTYPE)
 				`SrcTypeRegister: begin src <= reglist[ir1 `SRCREG]; end
@@ -201,8 +202,8 @@ always @(posedge clk) begin
 		
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
-			u[usp]= ir1 `DESTREG;
-			usp= usp+1;
+			u[usp]<= ir1 `DESTREG;
+			usp<= usp+1;
 		end
 		ir2 <= ir1;
 	end
@@ -223,10 +224,10 @@ end
 // stage4: execute and write
 always @(posedge clk) begin
 	if (ir3 != `Nop) begin
-		op4 <= ir3 `OP;
+		op4 = ir3 `OP;
 		case(op4)
 	
-	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
+	    `OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
 		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
 		`OPllo: begin $display("llo des:%d src:%d", des, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
 		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res <= {src, 8'b0}; op4 <=`OPnop; end
@@ -234,24 +235,19 @@ always @(posedge clk) begin
 		`OPor:	begin $display("or des:%d src:%d", des, src); res <= des | src; op4 <=`OPnop; end
 		`OPxor: begin $display("xor des:%d src:%d", des, src); res <= des ^ src; op4 <=`OPnop; end
 		`OPadd: begin $display("add des:%d src:%d", des, src); res <= des + src; op4 <=`OPnop; end
-		`OPsub: begin $display("sub des:%d src:%d", des, src); res <= des - src; op4 <=`OPnop; end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); res <= des - src; op4 <=`OPnop;  end
 		`OProl: begin $display("rol des:%d src:%d", des, src); res <= ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
 		`OPshr: begin $display("shr des:%d src:%d", des, src); res <= des >> src; op4 <=`OPnop; end
-		`OPbzjz: begin if(des==0)
-		begin $display("bz des:%d src:%d", des, src);
-			if(ir3 `SRCTYPE == 2'b01)
-			begin
-
-				branch=1;
-			end
-			else
-			begin
-				jump=1;
-			end
-
-		end
-		op4 <= `OPnop;
-		end
+		`OPbzjz: begin if(des==0) begin $display("bz des:%d src:%d", des, src);
+							if(ir3 `SRCTYPE == 2'b01) begin
+									branch=1;
+									end
+							else begin
+									jump=1;
+							end
+						end
+					op4 <= `OPnop;
+					end
 
 		`OPbnzjnz: begin if(des!=0)
 		begin $display("bnz des:%d src:%d", des, src);
@@ -307,13 +303,16 @@ always @(posedge clk) begin
 			end
 		endcase	
 
-		if (setsdes(op4)) begin // check if we are ready to push to the des 
+		if (setsdes(ir3)) begin // check if we are ready to push to the des 
 			des <= res;
 			$display("res: %d", res);
 		end // if (1)
 	
-	end // if (ir3 != `Nop)
+	end else begin
+			//jump <= 0;
+			end	// if (ir3 != `Nop)
 end //  always
+
 endmodule
 
 module testbench;
