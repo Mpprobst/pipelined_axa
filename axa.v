@@ -47,8 +47,7 @@
 `define OPxlo					6'b101000
 `define OPlhi					6'b110000
 `define OPllo					6'b111000
-
-
+`define OPnop					6'b111111
 
 // Checks
 // 	8-bit
@@ -95,12 +94,10 @@ reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s, sLA;
 reg `OP op4; // opcode for stage 4
-reg `DATA des, src, memreg;
-wire `DATA aluout;
+reg `DATA des, src, res;
 
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
-
 
 always @(reset) begin
 	halt <= 0;
@@ -143,7 +140,7 @@ always @(posedge clk) begin
 		pc<= tpc;
 	end else begin
 		ir0= instrmem[tpc];
-		
+		$display("ir0: %b", ir0);		
 		ir1<= ir0;
 		pc<= tpc+1;
 end
@@ -175,18 +172,21 @@ always @(posedge clk) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 		end
 		ir2 <= ir1;
+		$display("ir2: %b", ir2);
 	end
 end
 
 //stage3: Data memory
 always @(posedge clk) begin //should handle selection of source?
 	if(ir2 == `Nop) begin
+		ir3 <= `Nop;
 	end else begin
 		if(ir2 `SRCREG == `SrcTypeMem) begin
 			src <= datamem[ir2 `SRCREG];
 		end
+		ir3 <= ir2;
 	end
-	ir3 <= ir2;
+	$display("ir3: %b", ir3);
 end
 
 // stage4: execute and write
@@ -194,6 +194,7 @@ always @(posedge clk) begin
 	if (ir3 != `Nop) begin
 		op4 <= ir3 `OP;
 		$display("state: %d", op4);
+		halt <= 1;
 		case(op4)
 		/*`Start: begin
 			s <= `Decode;
@@ -242,22 +243,19 @@ end
 		*/
 		// Begin OPCODE States
 
-	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); des <= des; op4 <= `OPxor; end
-		`OPxhi: begin $display("xhi des:%d src:%d", des, src); reglist[12] <= src << 8; op4 <= `OPxhi2; end
-		`OPxhi2: begin $display("xhi2 des:%d src:%d", des, src); src <= reglist[12]; op4 <= `OPxor; end
-		//`OPxhi3: begin  <= des; op4 <= `OPxor; end
-		//`ALUOUT: begin des <= aluout; op4 <= `Nop; end
-		`OPllo: begin $display("llo des:%d src:%d", des, src); des <= {{8{src[7]}}, src}; op4 <=`Nop; end
-		`OPlhi: begin $display("lhi des:%d src:%d", des, src); des <= {src, 8'b0}; op4 <=`Nop; end
-		`OPand: begin $display("and des:%d src:%d", des, aluout); des <= des & src; op4 <=`Nop; end
-		`OPor:	begin $display("or des:%d src:%d", des, aluout); des <= des | src; op4 <=`Nop; end
-		`OPxor: begin $display("xor des:%d src:%d", des, aluout); des <= des ^ src; op4 <=`Nop; end
-		`OPadd: begin $display("add des:%d src:%d", des, aluout); des <= des + src; op4 <=`Nop; end
-		`OPsub: begin $display("sub des:%d src:%d", des, aluout); des <= des - src; op4 <=`Nop; end
-		`OProl: begin $display("rol des:%d src:%d", des, aluout); des <= ( (des << src) | (des >> (16-src)) ); op4 <=`Nop; end
-		`OPshr: begin $display("shr des:%d src:%d", des, aluout); des <= des >> src; op4 <=`Nop; end
+	    	`OPxlo: begin $display("xlo res:%d src:%d", res, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
+		`OPxhi: begin $display("xhi res:%d src:%d", res, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
+		`OPllo: begin $display("llo res:%d src:%d", res, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
+		`OPlhi: begin $display("lhi res:%d src:%d", res, src); res <= {src, 8'b0}; op4 <=`OPnop; end
+		`OPand: begin $display("and res:%d src:%d", res, src); res <= des & src; op4 <=`OPnop; end
+		`OPor:	begin $display("or res:%d src:%d", res, src); res <= des | src; op4 <=`OPnop; end
+		`OPxor: begin $display("xor res:%d src:%d", res, src); res <= des ^ src; op4 <=`OPnop; end
+		`OPadd: begin $display("add res:%d src:%d", res, src); res <= des + src; op4 <=`OPnop; end
+		`OPsub: begin $display("sub res:%d src:%d", res, src); res <= des - src; op4 <=`OPnop; end
+		`OProl: begin $display("rol res:%d src:%d", res, src); res <= ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
+		`OPshr: begin $display("shr res:%d src:%d", res, src); res <= des >> src; op4 <=`OPnop; end
 		`OPbzjz: begin if(des==0)
-		begin $display("bz des:%d src:%d", des, src);
+		begin $display("bz res:%d src:%d", res, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 
@@ -269,11 +267,11 @@ end
 			end
 
 		end
-		op4 <= `Nop;
+		op4 <= `OPnop;
 		end
 
 		`OPbnzjnz: begin if(des!=0)
-		begin $display("bnz des:%d src:%d", des, src);
+		begin $display("bnz res:%d src:%d", res, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -284,11 +282,11 @@ end
 			end
 
 		end
-		op4 <= `Nop;
+		op4 <= `OPnop;
 		end
 
 		`OPbnjn: begin if(des[15]==1)
-		begin $display("bn des:%d src:%d", des, src);
+		begin $display("bn res:%d src:%d", res, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -299,11 +297,11 @@ end
 			end
 
 		end
-		op4 <= `Nop;
+		op4 <= `OPnop;
 		end
 
 		`OPbnnjnn: begin if(des[15]==0)
-		begin $display("bnn des:%d src:%d", des, src);
+		begin $display("bnn res:%d src:%d", res, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 				pc <= pc+src-1;
@@ -314,17 +312,22 @@ end
 			end
 
 		end
-		op4 <= `Nop;
+		op4 <= `OPnop;
 		end
 
-		`Nop: op4 <= `Start;
-		`OPdup: begin $display("dup des:%d src:%d", des, src); des <= src; op4 <= `Nop; end
-		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; des <= src; op4 <= `Nop; end
+		`OPnop: op4 <= `OPnop;
+		`OPdup: begin $display("dup res:%d src:%d", res, src); res <= src; op4 <= `OPnop; end
+		`OPex: begin $display("ex res:%d src:%d", res, src); src <= des; res <= src; op4 <= `OPnop; end
 		default: begin
 
 			halt <= 1;
 			end
 		endcase	
+
+		if (1) begin // check if we are ready to push to the des 
+			des <= res;
+			$display("des: %d", des);
+		end // if (1)
 	
 	end // if (ir3 != `Nop)
 end //  always
