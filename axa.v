@@ -47,7 +47,7 @@
 `define OPxlo					6'b101000
 `define OPlhi					6'b110000
 `define OPllo					6'b111000
-`define OPnop					6'b111111
+`define OPnop					6'b111100
 
 // Checks
 // 	8-bit
@@ -100,21 +100,6 @@ reg `DATA des, src, res;
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
 
-function usesdes;
-input `INST inst;
-usesdes = ((inst `OP == `OPand) ||
-          (inst `OP == `OPor) ||
-          (inst `OP == `OPxor) ||
-          (inst `OP == `OPadd) ||
-          (inst `OP == `OPsub) ||
-          (inst `OP == `OProl) ||
-          (inst `OP == `OPshr) ||
-          (inst `OP == `OPex) ||
-          (inst `OP == `OPxhi) ||
-          (inst `OP == `OPxlo) ||
-          (inst `OP == `OPllo) ||
-          (inst `OP == `OPlhi));
-endfunction
 
 always @(reset) begin
 	halt <= 0;
@@ -185,7 +170,6 @@ always @(posedge clk) begin
 		pc<= tpc;
 	end else begin
 		ir0= instrmem[tpc];
-		$display("ir0: %b", ir0);		
 		ir1<= ir0;
 		pc<= tpc+1;
 end
@@ -217,7 +201,6 @@ always @(posedge clk) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 		end
 		ir2 <= ir1;
-		$display("ir2: %b", ir2);
 	end
 end
 
@@ -231,61 +214,14 @@ always @(posedge clk) begin //should handle selection of source?
 		end
 		ir3 <= ir2;
 	end
-	$display("ir3: %b", ir3);
 end
 
 // stage4: execute and write
 always @(posedge clk) begin
 	if (ir3 != `Nop) begin
 		op4 <= ir3 `OP;
-		$display("state: %d", op4);
-		halt <= 1;
 		case(op4)
-		/*`Start: begin
-			s <= `Decode;
-			end
 
-		`Decode: begin
-				// Change to if statement to combine states?
-				if (ir3 `OP8IMM) begin
-					$display("8immed op");
-					s <= `DecodeI8;
-				end else begin
-					$display("decode2");
-					s <= `Decode2;
-				end
-			end
-
-
-		// Regular Instruction
-		`Decode2: begin
-			$display("decode2");
-			// Grab the next state
-			case (ir3 `OP)
-				`OPland: s <= `Nop;
-				`OPcom: s <= `Nop;
-				`OPjerr: s <= `Nop;
-				`OPfail: s <= `Done;
-				`OPsys: s <= `Done;
-
-			endcase
-
-			sLA <= ir3 `OP;
-			end
-
-		// I8 instruction
-		`DecodeI8: begin
-			case (ir3 `OP8)
-				`OPxhiCheck: sLA <= `OPxhi;
-				`OPxloCheck: sLA <= `OPxlo;
-				`OPlhiCheck: sLA <= `OPlhi;
-				`OPlloCheck: sLA <= `OPllo;
-				default: halt <= 1;
-			endcase
-
-			s <= `SrcI8;
-			end
-		*/
 		// Begin OPCODE States
 
 	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
@@ -364,12 +300,12 @@ always @(posedge clk) begin
 		`OPdup: begin $display("dup des:%d src:%d", des, src); res <= src; op4 <= `OPnop; end
 		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
 		default: begin
-
+			$display("default case");
 			halt <= 1;
 			end
 		endcase	
 
-		if (usesdes(op4)) begin // check if we are ready to push to the des 
+		if (setsdes(op4)) begin // check if we are ready to push to the des 
 			des <= res;
 			$display("res: %d", res);
 		end // if (1)
