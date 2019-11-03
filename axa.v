@@ -201,6 +201,8 @@ always @(posedge clk) begin
 		
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
+			u[usp]= ir1 `DESTREG;
+			usp= usp+1;
 		end
 		ir2 <= ir1;
 	end
