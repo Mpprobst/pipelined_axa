@@ -100,7 +100,6 @@ reg `DATA des, src, res;
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
 
-
 always @(reset) begin
 	halt <= 0;
 	pc <= 0;
@@ -154,8 +153,10 @@ always @(posedge clk) begin
 
 	if(jump) begin
 		tpc= target;
+		jump=0;
 	end else if(branch) begin
 		tpc= pc + src-1;
+		branch=0;
 	end else begin
 		tpc=pc;
 	end
@@ -163,6 +164,7 @@ always @(posedge clk) begin
 	if(land) begin
 		u[usp]=tpc;
 		usp= usp+1;
+		land=0;
 	end
 
 
@@ -221,9 +223,7 @@ always @(posedge clk) begin
 	if (ir3 != `Nop) begin
 		op4 <= ir3 `OP;
 		case(op4)
-
-		// Begin OPCODE States
-
+	
 	    	`OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
 		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
 		`OPllo: begin $display("llo des:%d src:%d", des, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
@@ -240,11 +240,11 @@ always @(posedge clk) begin
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
 
-				pc <= pc+src-1;
+				branch=1;
 			end
 			else
 			begin
-				pc <= src;
+				jump=1;
 			end
 
 		end
@@ -255,11 +255,11 @@ always @(posedge clk) begin
 		begin $display("bnz des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				pc <= pc+src-1;
+				branch=1;
 			end
 			else
 			begin
-				pc <= src;
+				jump=1;
 			end
 
 		end
@@ -270,11 +270,11 @@ always @(posedge clk) begin
 		begin $display("bn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				pc <= pc+src-1;
+				branch=1;
 			end
 			else
 			begin
-				pc <= src;
+				jump=1;
 			end
 
 		end
@@ -285,11 +285,11 @@ always @(posedge clk) begin
 		begin $display("bnn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				pc <= pc+src-1;
+				branch=1;
 			end
 			else
 			begin
-				pc <= src;
+				jump=1;
 			end
 
 		end
