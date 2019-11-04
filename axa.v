@@ -151,6 +151,9 @@ function usessrc;
 endfunction
 
 //start pipeline
+//assign pendpc = (setsdes(ir1) || setsdes(ir2) || setsdes(ir3));
+
+assign pendpc = (setsdes(ir1) || setsdes(ir2));
 
 //Stage1: Fetch
 always @(posedge clk) begin
@@ -174,9 +177,14 @@ always @(posedge clk) begin
 	if(wait1) begin
 		pc<= tpc;
 	end else begin
+		if(pendpc) begin
+			ir1 <= `NOP;
+			pc <= tpc;
+	end else begin
 		ir0 = instrmem[tpc];
 		ir1<= ir0;
 		pc<= tpc+1;
+	end
 end
 
 
@@ -185,7 +193,6 @@ end //always block
 //stage2: register read
 always @(posedge clk) begin  
 	if((ir1 != `NOP) && setsdes(ir2) && ((usesdes(ir1) && (ir1 `DESTREG == ir2 `DESTREG)) || (usessrc(ir1) && (ir1 `SRCREG == ir2 `DESTREG)))) begin 
-	//if(ir1 != `NOP) begin	
 		wait1 = 1;
 		ir2 <= `NOP;
 	end else begin
@@ -199,9 +206,9 @@ always @(posedge clk) begin
 				default: begin end
 			endcase 
 		end else begin 
-			src2 <= ir1 `SRC8;
+		//	src2 <= ir1 `SRC8;
 		end
-		//$display("src: %d",src2);
+		$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 			u[usp]<= ir1 `DESTREG;
@@ -216,7 +223,7 @@ always @(posedge clk) begin //should handle selection of source?
 	if(ir2 == `NOP) begin
 		ir3 <= `NOP;
 	end else begin
-		if(ir2 `SRCREG == `SrcTypeMem) begin
+		if(ir2 `SRCTYPE == `SrcTypeMem) begin
 			src <= datamem[ir2 `SRCREG];
 		end else begin
 			src <=src2;
@@ -317,11 +324,11 @@ always @(posedge clk) begin
 		endcase	
 
 
-		if (setsdes(ir3)) begin // check if we are ready to set the des 
-			des <= res;
+		if(setsdes(ir3)) begin // check if we are ready to set the des 
+			reglist[ir3 `DESTREG] <= res;
 			jump <= 0;
 			$display("res: %d", res);
-		end // if (1)
+		end 
 	end
 end //  always
 endmodule
