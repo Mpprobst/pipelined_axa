@@ -138,9 +138,7 @@ function usesdes;
 				((inst`OP >= `OPshr) && (inst `OP <= `OPdup)) ||
 				((inst`OP >= `OPbzjz) && (inst `OP <= `OPbnnjnn)) ||
 				 (inst `OP == `OPxhi) ||
-				 (inst `OP == `OPxlo) //||
-				 //(inst `OP == `OPlhi) ||
-				 //(inst `OP == `OPllo)
+				 (inst `OP == `OPxlo) 
 				);
 endfunction
 
@@ -167,9 +165,10 @@ always @(posedge clk) begin
 	end
 
 	if(land) begin
-		u[usp]<=tpc;
-		usp<= usp+1;
-		land<=0;
+		u[usp] =tpc;
+		usp = usp+1;
+		land =0;
+		$display("UNDO buffer entry %d contains %d but should be %d.",usp,u[usp-1], ir1 `DESTREG);
 	end
 
 
@@ -207,11 +206,12 @@ always @(posedge clk) begin
 		end else begin 
 			src2 <= ir1 `SRC8;
 		end
-		$display("src: %d",src2);
+		//$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
-			u[usp]<= ir1 `DESTREG;
-			usp<= usp+1;
+			u[usp] = ir1 `DESTREG;
+			usp = usp+1;
+			$display("UNDO buffer entry %d contains %d but should be %d.",usp,u[usp-1], ir1 `DESTREG);
 		end
 		ir2 <= ir1;
 	end
@@ -317,7 +317,7 @@ $display("desval: %d", des);
                  default: begin
 			$display("default case");
 			halt <= 1;
-			end
+                end
 		endcase	
 
 
