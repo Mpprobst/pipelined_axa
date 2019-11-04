@@ -310,7 +310,8 @@ $display("desval: %d", des);
 		`OPdup: begin $display("dup des:%d src:%d", des, src); res = src; op4 <= `OPnop; end
 		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
 		`OPfail: begin if (!jump && !branch) begin // fail after a branch still gets executed. this prevents the fail in those cases
-                        halt <= 1;
+                        $display("FAIL");
+			halt <= 1;
                         end
                         end
                  default: begin
