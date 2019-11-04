@@ -200,12 +200,12 @@ always @(posedge clk) begin
 		if(ir1 `OP8IMM == 1'b0) begin
 			case(ir1 `SRCTYPE)
 				`SrcTypeRegister: begin src2 <= reglist[ir1 `SRCREG]; end
-				`SrcTypeI4Undo: begin src2 <= ir1 `SRCREG; end // Is this correct?
+				`SrcTypeI4Undo: begin src2 <= ir1 `SRCREG; end
 				`SrcTypeI4: begin src2 <= ir1 `SRCREG; end
 				default: begin end
 			endcase 
 		end else begin 
-		//	src2 <= ir1 `SRC8;
+			src2 <= ir1 `SRC8;
 		end
 		$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
@@ -238,93 +238,90 @@ always @(posedge clk) begin
 		jump <= 0;
 	end else begin
 		op4 = ir3 `OP;
+$display("desval: %d", des);
+                //des = ir3`DESTREG;
 		//src <= src1;
 		case(op4)
 	
-	    `OPxlo: begin $display("xlo des:%d src:%d", des, src); res = { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
-		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res = { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
+		`OPxlo: begin $display("xlo des:%d src:%d", des, src); res = {des`WHIGH, src`WLOW ^ des`WLOW}; op4 <= `OPnop; end
+		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res = {src`WLOW ^ des`WHIGH  , des`WLOW}; op4 <= `OPnop; end
 		`OPllo: begin $display("llo des:%d src:%d", des, src); res = {{8{src[7]}}, src}; op4 <=`OPnop; end
 		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res = {src, 8'b0}; op4 <=`OPnop; end
 		`OPand: begin $display("and des:%d src:%d", des, src); res = des & src; op4 <=`OPnop; end
 		`OPor:	begin $display("or des:%d src:%d", des, src);  res = des | src; op4 <=`OPnop; end
 		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; op4 <=`OPnop; end
-		`OPadd: begin $display("add des:%d src:%d rex:%d", des, src); res = des + src; op4 <=`OPnop;  end
+		`OPadd: begin $display("add des:%d src:%d", des, src); res = des + src; op4 <=`OPnop;  end
 		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; op4 <=`OPnop;  end
 		`OProl: begin $display("rol des:%d src:%d", des, src); res = ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
 		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; op4 <=`OPnop; end
-		`OPbzjz: begin if(des==0) begin $display("bz des:%d src:%d", des, src);
-							if(ir3 `SRCTYPE == 2'b01) begin
-									branch<=1;
-									end
-							else begin
-									jump<=1;
-									target<= src;
-							end
-						end
-					op4 <= `OPnop;
-					end
-
-		`OPbnzjnz: begin if(des!=0)
-		begin $display("bnz des:%d src:%d", des, src);
-			if(ir3 `SRCTYPE == 2'b01)
-			begin
+		`OPbzjz: begin if(des==0) begin 
+			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
+				$display("bz des:%d src:%d", des, src);
+			end else begin
+				jump<=1;
+				target<= src;
+				$display("jz des:%d src:%d", des, src);
 			end
-			else
-			begin
+			end
+			op4 <= `OPnop;
+		end
+
+		`OPbnzjnz: begin if(des!=0) begin
+			if(ir3 `SRCTYPE == 2'b01) begin
+				branch<=1;
+				$display("bnz des:%d src:%d", des, src);
+			end else begin
 				jump<=1;
 				target<=src;
+				$display("jnz des:%d src:%d", des, src);
 			end
-
+			end
+			op4 <= `OPnop;
 		end
-		op4 <= `OPnop;
-		end
 
-		`OPbnjn: begin if(des[15]==1)
-		begin $display("bn des:%d src:%d", des, src);
-			if(ir3 `SRCTYPE == 2'b01)
-			begin
+		`OPbnjn: begin if(des[15]==1) begin 
+			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
-			end
-			else
-			begin
+				 $display("bn des:%d src:%d", des, src);
+			end else begin
 				jump<=1;
 				target<=src;
+				 $display("jn des:%d src:%d", des, src);
 			end
-			
-
-		end
-		op4 <= `OPnop;
+			end
+			op4 <= `OPnop;
 		end
 
-		`OPbnnjnn: begin if(des[15]==0)
-		begin $display("bnn des:%d src:%d", des, src);
-			if(ir3 `SRCTYPE == 2'b01)
-			begin
+		`OPbnnjnn: begin if(des[15]==0) begin 
+			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
-			end
-			else
-			begin
+				$display("bnn des:%d src:%d", des, src);
+			end else begin
 				jump<=1;
 				target<=src;
+				$display("jnn des:%d src:%d", des, src);
 			end
-
-		end
-		op4 <= `OPnop;
+			end
+			op4 <= `OPnop;
 		end
 
 		`OPnop: op4 <= `OPnop;
 		`OPdup: begin $display("dup des:%d src:%d", des, src); res = src; op4 <= `OPnop; end
 		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
-		default: begin
+		`OPfail: begin if (!jump && !branch) begin // fail after a branch still gets executed. this prevents the fail in those cases
+                        halt <= 1;
+                        end
+                        end
+                 default: begin
 			$display("default case");
 			halt <= 1;
 			end
 		endcase	
 
 
-		if(setsdes(ir3)) begin // check if we are ready to set the des 
-			reglist[ir3 `DESTREG] <= res;
+		if(setsdes(ir3) && !jump && !branch) begin // check if we are ready to set the des 
+			reglist[ir3 `DESTREG] = res;
 			jump <= 0;
 			$display("res: %d", res);
 		end 
