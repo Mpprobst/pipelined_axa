@@ -248,10 +248,11 @@ always @(posedge clk) begin
 		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; op4 <=`OPnop; end
 		`OPbzjz: begin if(des==0) begin $display("bz des:%d src:%d", des, src);
 							if(ir3 `SRCTYPE == 2'b01) begin
-									branch=1;
+									branch<=1;
 									end
 							else begin
-									jump=1;
+									jump<=1;
+									target<= src;
 							end
 						end
 					op4 <= `OPnop;
@@ -261,11 +262,12 @@ always @(posedge clk) begin
 		begin $display("bnz des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				branch=1;
+				branch<=1;
 			end
 			else
 			begin
-				jump=1;
+				jump<=1;
+				target<=src;
 			end
 
 		end
@@ -281,8 +283,9 @@ always @(posedge clk) begin
 			else
 			begin
 				jump<=1;
+				target<=src;
 			end
-			target <= src;
+			
 
 		end
 		op4 <= `OPnop;
@@ -297,6 +300,7 @@ always @(posedge clk) begin
 			else
 			begin
 				jump<=1;
+				target<=src;
 			end
 
 		end
