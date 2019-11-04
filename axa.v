@@ -77,6 +77,8 @@
 `define OPxhi2					7'b1011000
 `define OPxhi3					7'b1011001
 
+`define NOP           16'b0
+
 
 module processor(halt, reset, clk);
 output reg halt;
@@ -95,7 +97,7 @@ reg `ADDRESS target;
 reg wait1;    //check to make sure stage 2 is caught up
 reg `STATE s, sLA;
 reg `OP op4; // opcode for stage 4
-reg `DATA des, src, res;
+reg `DATA des,des1, src,src1,src2, res;
 
 reg `DATA usp;  //This is how we will index through undo buffer
 reg `DATA u `USIZE;  //undo stack
@@ -104,10 +106,10 @@ always @(reset) begin
 	halt = 0;
 	pc = 0;
 	usp=0;
-	ir1= `Nop;
-	ir2= `Nop;
-	ir3= `Nop;
-	op4 = `Nop;
+	ir1= `NOP;
+	ir2= `NOP;
+	ir3= `NOP;
+	op4 = `NOP;
 	des = 0;
 	src = 0;
 	jump=0;
@@ -144,21 +146,20 @@ endfunction
 
 function usessrc;
 	input `INSTRUCTION inst;
-	usessrc = (((inst`OP >= `OPadd) && (inst `OP <= `OProl)) ||
-				((inst`OP >= `OPshr) && (inst `OP <= `OPdup)));
+	usessrc = ((((inst`OP >= `OPadd) && (inst `OP <= `OProl)) ||
+				((inst`OP >= `OPshr) && (inst `OP <= `OPdup))) && (inst `SRCTYPE == `SrcRegister));
 endfunction
 
 //start pipeline
 
 //Stage1: Fetch
 always @(posedge clk) begin
-
 	if(jump) begin
 		tpc= target;
-		jump=0;
+		jump <=0;
 	end else if(branch) begin
 		tpc= pc + src-1;
-		branch=0;
+		branch<=0;
 	end else begin
 		tpc=pc;
 	end
@@ -183,23 +184,24 @@ end //always block
 
 //stage2: register read
 always @(posedge clk) begin  
-	if((ir1 != `Nop) && setsdes(ir1) && ((usesdes(ir1) && (ir1 `DESTREG == ir2 `DESTREG)) || (usessrc(ir1) && (ir1 `SRCREG == ir2 `DESTREG)))) begin 
+	if((ir1 != `NOP) && setsdes(ir2) && ((usesdes(ir1) && (ir1 `DESTREG == ir2 `DESTREG)) || (usessrc(ir1) && (ir1 `SRCREG == ir2 `DESTREG)))) begin 
+	//if(ir1 != `NOP) begin	
 		wait1 = 1;
-		ir2 <= `Nop;
+		ir2 <= `NOP;
 	end else begin
 		wait1 = 0;
-		des <= reglist[ir1 `DESTREG];
+		des1 <= reglist[ir1 `DESTREG];
 		if(ir1 `OP8IMM == 1'b0) begin
 			case(ir1 `SRCTYPE)
-				`SrcTypeRegister: begin src <= reglist[ir1 `SRCREG]; end
-				`SrcTypeI4Undo: begin src <= ir1 `SRCREG; end // Is this correct?
-				`SrcTypeI4: begin src <= ir1 `SRCREG; end
+				`SrcTypeRegister: begin src2 <= reglist[ir1 `SRCREG]; end
+				`SrcTypeI4Undo: begin src2 <= ir1 `SRCREG; end // Is this correct?
+				`SrcTypeI4: begin src2 <= ir1 `SRCREG; end
 				default: begin end
 			endcase 
 		end else begin 
-			src <= ir1 `SRC8;
+			src2 <= ir1 `SRC8;
 		end
-		
+		//$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 			u[usp]<= ir1 `DESTREG;
@@ -211,33 +213,39 @@ end
 
 //stage3: Data memory
 always @(posedge clk) begin //should handle selection of source?
-	if(ir2 == `Nop) begin
-		ir3 <= `Nop;
+	if(ir2 == `NOP) begin
+		ir3 <= `NOP;
 	end else begin
 		if(ir2 `SRCREG == `SrcTypeMem) begin
 			src <= datamem[ir2 `SRCREG];
+		end else begin
+			src <=src2;
 		end
+		des<=des1;
 		ir3 <= ir2;
 	end
 end
 
 // stage4: execute and write
 always @(posedge clk) begin
-	if (ir3 != `Nop) begin
+	if (ir3 == `NOP) begin
+		jump <= 0;
+	end else begin
 		op4 = ir3 `OP;
+		//src <= src1;
 		case(op4)
 	
-	    `OPxlo: begin $display("xlo des:%d src:%d", des, src); res <= { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
-		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res <= { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
-		`OPllo: begin $display("llo des:%d src:%d", des, src); res <= {{8{src[7]}}, src}; op4 <=`OPnop; end
-		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res <= {src, 8'b0}; op4 <=`OPnop; end
-		`OPand: begin $display("and des:%d src:%d", des, src); res <= des & src; op4 <=`OPnop; end
-		`OPor:	begin $display("or des:%d src:%d", des, src); res <= des | src; op4 <=`OPnop; end
-		`OPxor: begin $display("xor des:%d src:%d", des, src); res <= des ^ src; op4 <=`OPnop; end
-		`OPadd: begin $display("add des:%d src:%d", des, src); res <= des + src; op4 <=`OPnop; end
-		`OPsub: begin $display("sub des:%d src:%d", des, src); res <= des - src; op4 <=`OPnop;  end
-		`OProl: begin $display("rol des:%d src:%d", des, src); res <= ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
-		`OPshr: begin $display("shr des:%d src:%d", des, src); res <= des >> src; op4 <=`OPnop; end
+	    `OPxlo: begin $display("xlo des:%d src:%d", des, src); res = { des`WHIGH ^ src`WLOW, des`WLOW }; op4 <= `OPnop; end
+		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res = { des`WHIGH, des`WLOW ^ src`WLOW }; op4 <= `OPnop; end
+		`OPllo: begin $display("llo des:%d src:%d", des, src); res = {{8{src[7]}}, src}; op4 <=`OPnop; end
+		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res = {src, 8'b0}; op4 <=`OPnop; end
+		`OPand: begin $display("and des:%d src:%d", des, src); res = des & src; op4 <=`OPnop; end
+		`OPor:	begin $display("or des:%d src:%d", des, src);  res = des | src; op4 <=`OPnop; end
+		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; op4 <=`OPnop; end
+		`OPadd: begin $display("add des:%d src:%d rex:%d", des, src); res = des + src; op4 <=`OPnop;  end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; op4 <=`OPnop;  end
+		`OProl: begin $display("rol des:%d src:%d", des, src); res = ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
+		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; op4 <=`OPnop; end
 		`OPbzjz: begin if(des==0) begin $display("bz des:%d src:%d", des, src);
 							if(ir3 `SRCTYPE == 2'b01) begin
 									branch=1;
@@ -268,12 +276,13 @@ always @(posedge clk) begin
 		begin $display("bn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				branch=1;
+				branch<=1;
 			end
 			else
 			begin
-				jump=1;
+				jump<=1;
 			end
+			target <= src;
 
 		end
 		op4 <= `OPnop;
@@ -283,11 +292,11 @@ always @(posedge clk) begin
 		begin $display("bnn des:%d src:%d", des, src);
 			if(ir3 `SRCTYPE == 2'b01)
 			begin
-				branch=1;
+				branch<=1;
 			end
 			else
 			begin
-				jump=1;
+				jump<=1;
 			end
 
 		end
@@ -295,7 +304,7 @@ always @(posedge clk) begin
 		end
 
 		`OPnop: op4 <= `OPnop;
-		`OPdup: begin $display("dup des:%d src:%d", des, src); res <= src; op4 <= `OPnop; end
+		`OPdup: begin $display("dup des:%d src:%d", des, src); res = src; op4 <= `OPnop; end
 		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
 		default: begin
 			$display("default case");
@@ -306,14 +315,11 @@ always @(posedge clk) begin
 
 		if (setsdes(ir3)) begin // check if we are ready to set the des 
 			des <= res;
+			jump <= 0;
 			$display("res: %d", res);
 		end // if (1)
-	
-	end else begin
-			//jump <= 0;
-			end	// if (ir3 != `Nop)
+	end
 end //  always
-
 endmodule
 
 module testbench;
