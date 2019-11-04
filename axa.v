@@ -151,9 +151,8 @@ function usessrc;
 endfunction
 
 //start pipeline
-//assign pendpc = (setsdes(ir1) || setsdes(ir2) || setsdes(ir3));
+assign pendpc = (setsdes(ir1) || setsdes(ir2) || setsdes(ir3));
 
-assign pendpc = (setsdes(ir1) || setsdes(ir2));
 
 //Stage1: Fetch
 always @(posedge clk) begin
