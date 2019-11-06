@@ -204,7 +204,7 @@ always @(posedge clk) begin
 		end else begin 
 			src2 <= ir1 `SRC8;
 		end
-		//$display("src: %d",src2);
+		$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 			u[usp] = ir1 `DESTREG;
@@ -249,7 +249,7 @@ always @(posedge clk) begin
 		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; end
 		`OPadd: begin $display("add des:%d src:%d", des, src); res = des + src; end
 		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; end
-		`OProl: begin $display("rol des:%d src:%d", des, src); res <= { (des << src), (des >> (16 - src)) }; end
+		`OProl: begin $display("rol des:%d src:%d", des, src); res = (des << src) |(des >> (16 - src)); end
 		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; end
 		`OPbzjz: begin if(des==0) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin

@@ -246,7 +246,7 @@ always @(posedge clk) begin
 		`OPxor: begin res = des ^ src; end
 		`OPadd: begin res = des + src; end
 		`OPsub: begin res = des - src; end
-		`OProl: begin res <= { (des << src), (des >> (16 - src)) }; end
+		`OProl: begin res = (des << src) |(des >> (16 - src)); end
 		`OPshr: begin res = des >> src; end
 		`OPbzjz: begin if(des==0) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin
