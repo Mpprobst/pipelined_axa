@@ -1,0 +1,38 @@
+; test branch and jumps separately
+xor $1, $1
+llo $2, 6	; instruction target for t1
+bz $1, 2		; if true skips sys
+sys
+jz $1, $2 
+sys
+; t1
+llo $3, 10	; sets target for t2
+ex $3, @$1
+jz $3, @$1
+sys
+
+; t2 now test bnz add 11 to targets
+add $1, 1
+llo $2, 16	; instruction target for t3
+bnz $1, 2
+sys
+jnz $1, $2
+sys
+; t3
+llo $3, 20
+ex $3, @$1
+jnz $3, @$1
+sys
+
+; t4 now test bnn add 12 to t2 targets
+llo $2, 26
+xor $1, $1
+bnn $1, 2
+sys
+jnn $0, $2
+sys
+; t5
+llo $3, 30
+ex $3, @$1
+jnn $3, @$1
+sys

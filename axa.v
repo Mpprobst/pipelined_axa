@@ -74,8 +74,6 @@
 `define SrcI8 					7'b1001011
 `define SrcMem					7'b1001100
 `define Done					6'b111101
-`define OPxhi2					7'b1011000
-`define OPxhi3					7'b1011001
 
 `define NOP           16'b0
 
@@ -238,22 +236,21 @@ always @(posedge clk) begin
 		jump <= 0;
 	end else begin
 		op4 = ir3 `OP;
-$display("desval: %d", des);
                 //des = ir3`DESTREG;
 		//src <= src1;
 		case(op4)
 	
-		`OPxlo: begin $display("xlo des:%d src:%d", des, src); res = {des`WHIGH, src`WLOW ^ des`WLOW}; op4 <= `OPnop; end
-		`OPxhi: begin $display("xhi des:%d src:%d", des, src); res = {src`WLOW ^ des`WHIGH  , des`WLOW}; op4 <= `OPnop; end
-		`OPllo: begin $display("llo des:%d src:%d", des, src); res = {{8{src[7]}}, src}; op4 <=`OPnop; end
-		`OPlhi: begin $display("lhi des:%d src:%d", des, src); res = {src, 8'b0}; op4 <=`OPnop; end
-		`OPand: begin $display("and des:%d src:%d", des, src); res = des & src; op4 <=`OPnop; end
-		`OPor:	begin $display("or des:%d src:%d", des, src);  res = des | src; op4 <=`OPnop; end
-		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; op4 <=`OPnop; end
-		`OPadd: begin $display("add des:%d src:%d", des, src); res = des + src; op4 <=`OPnop;  end
-		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; op4 <=`OPnop;  end
-		`OProl: begin $display("rol des:%d src:%d", des, src); res = ( (des << src) | (des >> (16-src)) ); op4 <=`OPnop; end
-		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; op4 <=`OPnop; end
+		`OPxlo: begin $display("xlo reg:%d src:%d", ir3`DESTREG, src); res = {des`WHIGH, src`WLOW ^ des`WLOW}; end
+		`OPxhi: begin $display("xhi reg:%d src:%d", ir3`DESTREG, src); res = {src`WLOW ^ des`WHIGH  , des`WLOW}; end
+		`OPllo: begin $display("llo reg:%d src:%d", ir3`DESTREG, src); res = {{8{src[7]}}, src}; op4 <=`OPnop; end
+		`OPlhi: begin $display("lhi reg:%d src:%d", ir3`DESTREG, src); res = {src, 8'b0}; end
+		`OPand: begin $display("and des:%d src:%d", des, src); res = des & src; end
+		`OPor:	begin $display("or des:%d src:%d", des, src);  res = des | src; end
+		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; end
+		`OPadd: begin $display("add des:%d src:%d", des, src); res = des + src; end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; end
+		`OProl: begin $display("rol des:%d src:%d", des, src); res <= { (des << src), (des >> (16 - src)) }; end
+		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; end
 		`OPbzjz: begin if(des==0) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
@@ -261,10 +258,9 @@ $display("desval: %d", des);
 			end else begin
 				jump<=1;
 				target<= src;
-				$display("jz des:%d src:%d", des, src);
+				$display("jz reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
-			op4 <= `OPnop;
 		end
 
 		`OPbnzjnz: begin if(des!=0) begin
@@ -274,10 +270,9 @@ $display("desval: %d", des);
 			end else begin
 				jump<=1;
 				target<=src;
-				$display("jnz des:%d src:%d", des, src);
+				$display("jnz reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
-			op4 <= `OPnop;
 		end
 
 		`OPbnjn: begin if(des[15]==1) begin 
@@ -287,10 +282,9 @@ $display("desval: %d", des);
 			end else begin
 				jump<=1;
 				target<=src;
-				 $display("jn des:%d src:%d", des, src);
+				 $display("jn reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
-			op4 <= `OPnop;
 		end
 
 		`OPbnnjnn: begin if(des[15]==0) begin 
@@ -300,17 +294,21 @@ $display("desval: %d", des);
 			end else begin
 				jump<=1;
 				target<=src;
-				$display("jnn des:%d src:%d", des, src);
+				$display("jnn reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
-			op4 <= `OPnop;
 		end
 
-		`OPnop: op4 <= `OPnop;
 		`OPdup: begin $display("dup des:%d src:%d", des, src); res = src; op4 <= `OPnop; end
-		`OPex: begin $display("ex des:%d src:%d", des, src); src <= des; res <= src; op4 <= `OPnop; end
+		`OPex: begin $display("ex reg:%d val: %d mem:%d val: %d", ir3`DESTREG, reglist[ir3`DESTREG], ir3 `SRCREG, src); 
+			res <= src; datamem[reglist[ir3 `SRCREG]] <= des; op4 <= `OPnop; end
 		`OPfail: begin if (!jump && !branch) begin // fail after a branch still gets executed. this prevents the fail in those cases
                         $display("FAIL");
+			halt <= 1;
+                        end
+                        end
+		`OPsys: begin if (!jump && !branch) begin // sys after a branch still gets executed. this prevents the fail in those cases
+                        $display("sys call");
 			halt <= 1;
                         end
                         end
