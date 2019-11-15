@@ -166,6 +166,7 @@ always @(posedge clk) begin
 		u[usp] =tpc;
 		usp = usp+1;
 		land =0;
+		$display("UNDO buffer entry %d contains %d but should be %d.",usp,u[usp-1], ir1 `DESTREG);
 	end
 
 
@@ -203,10 +204,12 @@ always @(posedge clk) begin
 		end else begin 
 			src2 <= ir1 `SRC8;
 		end
+		$display("src: %d",src2);
 		if(ir1`OPPUSH) begin
 			//NEEDS TO PUSH des TO UNDO BUFFER
 			u[usp] = ir1 `DESTREG;
 			usp = usp+1;
+			$display("UNDO buffer entry %d contains %d but should be %d.",usp,u[usp-1], ir1 `DESTREG);
 		end
 		ir2 <= ir1;
 	end
@@ -237,23 +240,25 @@ always @(posedge clk) begin
 		//src <= src1;
 		case(op4)
 	
-		`OPxlo: begin res = {des`WHIGH, src`WLOW ^ des`WLOW}; end
-		`OPxhi: begin res = {src`WLOW ^ des`WHIGH  , des`WLOW}; end
-		`OPllo: begin res = {{8{src[7]}}, src}; op4 <=`OPnop; end
-		`OPlhi: begin res = {src, 8'b0}; end
-		`OPand: begin res = des & src; end
-		`OPor:	begin res = des | src; end
-		`OPxor: begin res = des ^ src; end
-		`OPadd: begin res = des + src; end
-		`OPsub: begin res = des - src; end
-		`OProl: begin res = (des << src) |(des >> (16 - src)); end
-		`OPshr: begin res = des >> src; end
+		`OPxlo: begin $display("xlo reg:%d src:%d", ir3`DESTREG, src); res = {des`WHIGH, src`WLOW ^ des`WLOW}; end
+		`OPxhi: begin $display("xhi reg:%d src:%d", ir3`DESTREG, src); res = {src`WLOW ^ des`WHIGH  , des`WLOW}; end
+		`OPllo: begin $display("llo reg:%d src:%d", ir3`DESTREG, src); res = {{8{src[7]}}, src}; op4 <=`OPnop; end
+		`OPlhi: begin $display("lhi reg:%d src:%d", ir3`DESTREG, src); res = {src, 8'b0}; end
+		`OPand: begin $display("and des:%d src:%d", des, src); res = des & src; end
+		`OPor:	begin $display("or des:%d src:%d", des, src);  res = des | src; end
+		`OPxor: begin $display("xor des:%d src:%d", des, src); res = des ^ src; end
+		`OPadd: begin $display("add des:%d src:%d", des, src); res = des + src; end
+		`OPsub: begin $display("sub des:%d src:%d", des, src); res = des - src; end
+		`OProl: begin $display("rol des:%d src:%d", des, src); res = (des << src) |(des >> (16 - src)); end
+		`OPshr: begin $display("shr des:%d src:%d", des, src); res = des >> src; end
 		`OPbzjz: begin if(des==0) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
+				$display("bz des:%d src:%d", des, src);
 			end else begin
 				jump<=1;
 				target<= src;
+				$display("jz reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
 		end
@@ -261,9 +266,11 @@ always @(posedge clk) begin
 		`OPbnzjnz: begin if(des!=0) begin
 			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
+				$display("bnz des:%d src:%d", des, src);
 			end else begin
 				jump<=1;
 				target<=src;
+				$display("jnz reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
 		end
@@ -271,9 +278,11 @@ always @(posedge clk) begin
 		`OPbnjn: begin if(des[15]==1) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
+				 $display("bn des:%d src:%d", des, src);
 			end else begin
 				jump<=1;
 				target<=src;
+				 $display("jn reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
 		end
@@ -281,16 +290,20 @@ always @(posedge clk) begin
 		`OPbnnjnn: begin if(des[15]==0) begin 
 			if(ir3 `SRCTYPE == 2'b01) begin
 				branch<=1;
+				$display("bnn des:%d src:%d", des, src);
 			end else begin
 				jump<=1;
 				target<=src;
+				$display("jnn reg:%d src:%d", ir3`DESTREG, src);
 			end
 			end
 		end
 
-		`OPdup: begin res = src; end
-		`OPex: begin res <= src; datamem[reglist[ir3 `SRCREG]] <= des; end
+		`OPdup: begin $display("dup des:%d src:%d", des, src); res = src; op4 <= `OPnop; end
+		`OPex: begin $display("ex reg:%d val: %d mem:%d val: %d", ir3`DESTREG, reglist[ir3`DESTREG], ir3 `SRCREG, src); 
+			res <= src; datamem[reglist[ir3 `SRCREG]] <= des; op4 <= `OPnop; end
 		`OPfail: begin if (!jump && !branch) begin // fail after a branch still gets executed. this prevents the fail in those cases
+                        $display("FAIL");
 			halt <= 1;
                         end
                         end
@@ -300,6 +313,7 @@ always @(posedge clk) begin
                         end
                         end
                  default: begin
+			$display("default case");
 			halt <= 1;
                 end
 		endcase	
@@ -308,6 +322,7 @@ always @(posedge clk) begin
 		if(setsdes(ir3) && !jump && !branch) begin // check if we are ready to set the des 
 			reglist[ir3 `DESTREG] = res;
 			jump <= 0;
+			$display("res: %d", res);
 		end 
 	end
 end //  always
